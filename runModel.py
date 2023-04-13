@@ -140,7 +140,7 @@ X = trajectories[:, :-1, :]
 y = trajectories[:, 1:, :]
 
 # Split data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+#X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=42)
 
 import torch
 import torch.nn as nn
@@ -166,14 +166,21 @@ class LSTMCellModel(nn.Module):
                 print()
             else:
                 if(i % horizon == 0):
-                    hx, cx = self.lstm_cell(x[:, i, :], (hx, cx))
+                    state = x[:, i, :]
+                    hx, cx = self.lstm_cell(state, (hx, cx))
                     hx2, cx2 = self.lstm_cell2(hx, (hx2,cx2))
                     outputs.append(self.fc(hx2))
                 else:
                     state = x[:, i, :]
+                    prevPos = []
+                    if i % horizon == 1:
+                        prevState = x[:, i - 1, :]
+                        prevPos = prevState[:,:3].detach().cpu().numpy()[0]
+                    else:
+                        prevPos = outputs[-2].detach().cpu().numpy()[0]
                     prevOut = outputs[-1].detach().cpu().numpy()[0]
                     ballPos = state[:, 6:9].detach().cpu().numpy()[0]
-                    vel = calculate_velocity(prevOut,state[:,:3].detach().cpu().numpy()[0],0.1)
+                    vel = calculate_velocity(prevPos,prevOut,0.1)
                     vel.append(distance.euclidean(prevOut,ballPos))
                     vel.append(getAngle(prevOut,ballPos))
                     vel.append(distance.euclidean(prevOut,goalPos))
@@ -196,6 +203,8 @@ model.load_state_dict(torch.load("imitation_model.pt"))
 criterion = nn.MSELoss()
 outputList = []
 inputList = []
+X_test = X
+y_test = y
 with torch.no_grad():
     test_loss = 0
     for i, (inputs, targets) in enumerate(zip(X_test, y_test)):
